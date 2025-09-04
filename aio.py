@@ -16,19 +16,15 @@ dp = Dispatcher()
 # Обработчик команды /start
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+
+    kb = [
+        [types.KeyboardButton(text="Кнопка 1")],
+        [types.KeyboardButton(text="Кнопка 2")]
+    ]
+
     await message.answer("Привет! Я простой бот на aiogram 🤖")
-
-@dp.message()
-async def send_menu(message: types.Message):
-    builder = KeyboardBuilder()
-    builder.add(types.KeyboardButton(text="Кнопка 1")) #Добавляет кнопку
-    builder.add(types.KeyboardButton(text="URL", url="https://www.google.com")) #Добавляет URL-кнопку
-    builder.add(types.KeyboardButton(text="Кнопка 2"))
-
-    builder.adjust(2, 1) 
-
-    await message.answer("Выберите опцию:", reply_markup=builder.as_markup())
-
+    keyboard = types.ReplyKeyboardMarkup(keyboard=kb)
+    await message.answer("Как подавать котлеты?", reply_markup=keyboard)
 
 
 @dp.message()
