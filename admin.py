@@ -1,60 +1,57 @@
-import schedule
-import telebot
-from threading import Thread
-from time import sleep
+import random
+import time
+from collections import defaultdict
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters,ContextTypes, CallbackContext
+from apscheduler.schedulers.background import BackgroundScheduler
 
-TOKEN = "Some Token"
+#Хранилище активности
+activity_log = defaultdict(list)
 
-bot = telebot.TeleBot(TOKEN)
-some_id = 12345 # This is our chat id.
+def too_many_messages(user_id):
+    now = time.time()
+    recent = [t for t in activity_log[user_id] if now - t < 60]
+    recent.append(now)
+    activity_log[user_id] = recent
+    return len(recent) > 10
 
-def schedule_checker():
-    while True:
-        schedule.run_pending()
-        sleep(1)
+async def handle_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sender = update.message.from_user
+    if sender.is_bot:
+        return
+    if too_many_messages(sender.id):
+        return
+    name = sender.username or sender.first_name
+    await update.message.reply_text(f"Сообщение от @{name} получено.")
 
-def function_to_run():
-    return bot.send_message(some_id, "This is a message to send.")
+async def send_daily_pick(context: CallbackContext):
+    chat_id = context.job.chat_id
+    bot = context.bot
+    admins = await bot.get_chat_administrators(chat_id)
+    people = [admin.user.id for admin in admins if not admin.user.is_bot]
+
+    if not people:
+        await bot.send_message(chat_id, "Никого не удалось выбрать.")
+        return
+
+    chosen = random.choice(people)
+    await bot.send_message(chat_id, f"Сегодня выбран участник: ID {chosen}")
+
+def run_bot():
+    bot_token = "BOT_API_TOKEN"
+    group_id = -3290089021821 
+
+    app = ApplicationBuilder().token(bot_token).build()
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, handle_group_message))
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        lambda: app.job_queue.run_once(send_daily_pick, when=0, chat_id=group_id),
+        trigger='cron', hour=9, minute=0
+    )
+    scheduler.start()
+
+    app.run_polling()
 
 if __name__ == "__main__":
-    # Create the job in schedule.
-    schedule.every().saturday.at("07:00").do(function_to_run)
-
-    # Spin up a thread to run the schedule check so it doesn't block your bot.
-    # This will take the function schedule_checker which will check every second
-    # to see if the scheduled job needs to be ran.
-    Thread(target=schedule_checker).start() 
-
-    # And then of course, start your server.
-    server.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
-
-
-
-    import telebot
-import config
-from datetime import time, date, datetime
-
-bot = telebot.TeleBot(config.bot_token)
-chat_id=config.my_id    
-
-@bot.message_handler(commands=['start', 'help'])
-def print_hi(message):
-    bot.send_message(message.chat.id, 'Hi!')
-
-
-@bot.message_handler(func=lambda message: False) #cause there is no message
-def saturday_message():
-    now = datetime.now()
-    if (now.date().weekday() == 5) and (now.time() == time(8,0)):
-        bot.send_message(chat_id, 'Wake up!')
-
-bot.polling(none_stop=True)
-
-
-
-
-
-#Запланированное ежедневное сообщение
-# рандомный выбор user id 
-# Антибот
-# Анти спам ( user jnghfdkztn > 10 соб мин) 
+    run_bot()
